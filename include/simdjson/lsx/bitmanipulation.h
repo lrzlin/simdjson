@@ -35,7 +35,7 @@ simdjson_inline int leading_zeroes(uint64_t input_num) {
 
 /* result might be undefined when input_num is zero */
 simdjson_inline int count_ones(uint64_t input_num) {
-  return __lsx_vpickve2gr_w(__lsx_vpcnt_d(__m128i(v2u64{input_num, 0})), 0);
+  return __builtin_popcountll(input_num);
 }
 
 

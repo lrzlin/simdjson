@@ -70,7 +70,7 @@ namespace simd {
     // Splat constructor
     simdjson_inline simd8(bool _value) : base8<bool>(splat(_value)) {}
 
-    simdjson_inline int to_bitmask() const { return __lsx_vpickve2gr_w(__lsx_vmskltz_b(*this), 0); }
+    simdjson_inline int to_bitmask() const { return lsx_movfr2gr_s(__lsx_vmskltz_b(*this)); }
     simdjson_inline bool any() const { return !__lsx_bz_v(this->value); }
     simdjson_inline simd8<bool> operator~() const { return *this ^ true; }
   };
@@ -310,7 +310,7 @@ namespace simd {
       __m128i mask4 = __lsx_vmskltz_b(this->chunks[3]);
       mask1 = __lsx_vilvl_h(mask2, mask1);
       mask2 = __lsx_vilvl_h(mask4, mask3);
-      return __lsx_vpickve2gr_du(__lsx_vilvl_w(mask2, mask1), 0);
+      return lsx_movfr2gr_d(__lsx_vilvl_w(mask2, mask1));
     }
 
     simdjson_inline simd8<T> reduce_or() const {

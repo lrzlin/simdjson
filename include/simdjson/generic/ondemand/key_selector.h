@@ -33,6 +33,7 @@
 #endif
 #if defined(__loongarch_sx)
   #include <lsxintrin.h>
+  #include "simdjson/lsx/intrinsics.h"
   #define SIMDJSON_KEY_SELECTOR_HAS_LSX 1
 #else
   #define SIMDJSON_KEY_SELECTOR_HAS_LSX 0
@@ -786,7 +787,7 @@ simdjson_really_inline std::size_t scan_key_length(const char* p) noexcept {
         __m128i cmp = __lsx_vseq_b(v, __lsx_vreplgr2vr_b('"'));
         // vmskltz_b gathers the per-byte sign bits (set where the byte equals '"')
         // into the low 16 bits of lane 0, the LSX equivalent of movemask.
-        unsigned m  = static_cast<unsigned>(__lsx_vpickve2gr_w(__lsx_vmskltz_b(cmp), 0)) & 0xFFFFu;
+        unsigned m  = static_cast<unsigned>(lsx_movfr2gr_s(__lsx_vmskltz_b(cmp)));
         if (simdjson_likely(m != 0)) { return b * 16 + std::size_t(__builtin_ctz(m)); }
     }
     return MaxKeyLen + 1;
@@ -827,7 +828,7 @@ simdjson_really_inline bool compare_key_bytes(
         __m128i idx = __lsx_vld(reinterpret_cast<const void*>(idx16), 0);
         __m128i mask = __lsx_vslt_b(idx, __lsx_vreplgr2vr_b(static_cast<int>(len)));
         __m128i eq = __lsx_vseq_b(__lsx_vand_v(vp, mask), vs);
-        return (static_cast<unsigned>(__lsx_vpickve2gr_w(__lsx_vmskltz_b(eq), 0)) & 0xFFFFu) == 0xFFFFu;
+        return static_cast<unsigned>(lsx_movfr2gr_s(__lsx_vmskltz_b(eq))) == 0xFFFFu;
 #else
         for (std::size_t i = 0; i < len; ++i)
             if (p[i] != stored[i]) return false;
@@ -868,8 +869,8 @@ simdjson_really_inline bool compare_key_bytes(
         __m128i m_hi = __lsx_vslt_b(__lsx_vld(reinterpret_cast<const void*>(idx32_hi), 0), lenv);
         __m128i eq_lo = __lsx_vseq_b(__lsx_vand_v(vp_lo, m_lo), vs_lo);
         __m128i eq_hi = __lsx_vseq_b(__lsx_vand_v(vp_hi, m_hi), vs_hi);
-        unsigned mlo = static_cast<unsigned>(__lsx_vpickve2gr_w(__lsx_vmskltz_b(eq_lo), 0)) & 0xFFFFu;
-        unsigned mhi = static_cast<unsigned>(__lsx_vpickve2gr_w(__lsx_vmskltz_b(eq_hi), 0)) & 0xFFFFu;
+        unsigned mlo = static_cast<unsigned>(lsx_movfr2gr_s(__lsx_vmskltz_b(eq_lo)));
+        unsigned mhi = static_cast<unsigned>(lsx_movfr2gr_s(__lsx_vmskltz_b(eq_hi)));
         return (mlo & mhi) == 0xFFFFu;
 #else
         for (std::size_t i = 0; i < len; ++i)

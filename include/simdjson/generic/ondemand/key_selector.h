@@ -908,10 +908,12 @@ simdjson_really_inline bool compare_key_bytes(
         __m128i base = __lsx_vld(reinterpret_cast<const void*>(idx16), 0);
         __m128i lenv = __lsx_vreplgr2vr_b(static_cast<int>(len));
         __m128i eq_all = __lsx_vldi(-1);
+        __m128i acc = __lsx_vldi(0);
         for (std::size_t b = 0; b < num_blocks; ++b) {
             __m128i vp   = __lsx_vld(reinterpret_cast<const void*>(p + b * 16), 0);
             __m128i vs   = __lsx_vld(reinterpret_cast<const void*>(stored + b * 16), 0);
-            __m128i idxv = __lsx_vadd_b(base, __lsx_vreplgr2vr_b(static_cast<int>(b * 16)));
+            acc = __lsx_vaddi_bu(acc, 16);
+            __m128i idxv = __lsx_vadd_b(base, acc);
             __m128i mask = __lsx_vslt_b(idxv, lenv);
             __m128i eq   = __lsx_vseq_b(__lsx_vand_v(vp, mask), vs);
             eq_all = __lsx_vand_v(eq_all, eq);

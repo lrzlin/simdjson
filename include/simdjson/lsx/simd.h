@@ -70,14 +70,19 @@ namespace simd {
     // Splat constructor
     simdjson_inline simd8(bool _value) : base8<bool>(splat(_value)) {}
 
-    simdjson_inline int to_bitmask() const { return lsx_movfr2gr_s(__lsx_vmskltz_b(*this)); }
-    simdjson_inline bool any() const { return !__lsx_bz_v(this->value); }
-    simdjson_inline simd8<bool> operator~() const { return *this ^ true; }
+    simdjson_inline int to_bitmask() const { return (int)lsx_movfr2gr_s(__lsx_vmskltz_b(*this)); }
+    simdjson_inline bool any() const { return __lsx_bnz_v(this->value); }
+    simdjson_inline simd8<bool> operator~() const { return __lsx_vnori_b(this->value, 0); }
   };
 
   template<typename T>
   struct base8_numeric: base8<T> {
-    static simdjson_inline simd8<T> splat(T _value) { return __lsx_vreplgr2vr_b(_value); }
+    static simdjson_inline simd8<T> splat(T _value) {
+      if (__builtin_constant_p(_value)) {
+        return __lsx_vrepli_b(_value);
+      }
+      return __lsx_vreplgr2vr_b(_value);
+    }
     static simdjson_inline simd8<T> zero() { return __lsx_vldi(0); }
     static simdjson_inline simd8<T> load(const T values[16]) {
       return __lsx_vld(reinterpret_cast<const __m128i *>(values), 0);
@@ -238,7 +243,7 @@ namespace simd {
     simdjson_inline simd8<bool> operator<(const simd8<uint8_t> other) const { return __lsx_vslt_bu(*this, other); }
 
     // Bit-specific operations
-    simdjson_inline simd8<bool> bits_not_set() const { return *this == uint8_t(0); }
+    simdjson_inline simd8<bool> bits_not_set() const { return __lsx_vseqi_b(*this, 0); }
     simdjson_inline simd8<bool> bits_not_set(simd8<uint8_t> bits) const { return (*this & bits).bits_not_set(); }
     simdjson_inline simd8<bool> any_bits_set() const { return ~this->bits_not_set(); }
     simdjson_inline simd8<bool> any_bits_set(simd8<uint8_t> bits) const { return ~this->bits_not_set(bits); }

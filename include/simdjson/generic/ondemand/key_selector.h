@@ -33,7 +33,6 @@
 #endif
 #if defined(__loongarch_sx)
   #include <lsxintrin.h>
-  #include "simdjson/lsx/intrinsics.h"
   #define SIMDJSON_KEY_SELECTOR_HAS_LSX 1
 #else
   #define SIMDJSON_KEY_SELECTOR_HAS_LSX 0
@@ -787,7 +786,8 @@ simdjson_really_inline std::size_t scan_key_length(const char* p) noexcept {
         __m128i cmp = __lsx_vseq_b(v, __lsx_vrepli_b('"'));
         // vmskltz_b gathers the per-byte sign bits (set where the byte equals '"')
         // into the low 16 bits of lane 0, the LSX equivalent of movemask.
-        unsigned m  = static_cast<unsigned>(lsx_movfr2gr_s(__lsx_vmskltz_b(cmp)));
+        uint64_t m;
+        __asm__ ("movfr2gr.d %0, %1" : "=r"(m) : "f"(((v2f64)__lsx_vmskltz_b(cmp))[0]));
         if (simdjson_likely(m != 0)) { return b * 16 + std::size_t(__builtin_ctz(m)); }
     }
     return MaxKeyLen + 1;
@@ -907,7 +907,7 @@ simdjson_really_inline bool compare_key_bytes(
 #elif SIMDJSON_KEY_SELECTOR_HAS_LSX
         __m128i base = __lsx_vld(reinterpret_cast<const void*>(idx16), 0);
         __m128i lenv = __lsx_vreplgr2vr_b(static_cast<int>(len));
-        __m128i eq_all = __lsx_vldi(0);
+        __m128i eq_all = __lsx_vldi(-1);
         for (std::size_t b = 0; b < num_blocks; ++b) {
             __m128i vp   = __lsx_vld(reinterpret_cast<const void*>(p + b * 16), 0);
             __m128i vs   = __lsx_vld(reinterpret_cast<const void*>(stored + b * 16), 0);

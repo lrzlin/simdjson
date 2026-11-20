@@ -234,8 +234,8 @@ namespace simd {
     simdjson_inline simd8<uint8_t> lt_bits(const simd8<uint8_t> other) const { return other.saturating_sub(*this); }
     simdjson_inline simd8<bool> operator<=(const simd8<uint8_t> other) const { return __lsx_vsle_bu(*this, other); }
     simdjson_inline simd8<bool> operator>=(const simd8<uint8_t> other) const { return __lsx_vsle_bu(other, *this); }
-    simdjson_inline simd8<bool> operator>(const simd8<uint8_t> other) const { return __lsx_vslt_bu(*this, other); }
-    simdjson_inline simd8<bool> operator<(const simd8<uint8_t> other) const { return __lsx_vslt_bu(other, *this); }
+    simdjson_inline simd8<bool> operator>(const simd8<uint8_t> other) const { return __lsx_vslt_bu(other, *this); }
+    simdjson_inline simd8<bool> operator<(const simd8<uint8_t> other) const { return __lsx_vslt_bu(*this, other); }
 
     // Bit-specific operations
     simdjson_inline simd8<bool> bits_not_set() const { return *this == uint8_t(0); }
@@ -244,11 +244,13 @@ namespace simd {
     simdjson_inline simd8<bool> any_bits_set(simd8<uint8_t> bits) const { return ~this->bits_not_set(bits); }
     simdjson_inline bool is_ascii() const { return __lsx_bz_v(__lsx_vmskltz_b(*this)); }
     simdjson_inline bool bits_not_set_anywhere() const { return __lsx_bz_v(this->value); }
-    simdjson_inline bool any_bits_set_anywhere() const { return __lsx_bz_v(__lsx_vand_v(*this, bits)); }
+    simdjson_inline bool any_bits_set_anywhere() const { return __lsx_bnz_v(this->value); }
     simdjson_inline bool bits_not_set_anywhere(simd8<uint8_t> bits) const {
-      return 0 == __lsx_bz_v(__lsx_vand_v(*this, bits));
+      return __lsx_bz_v(__lsx_vand_v(*this, bits));
     }
-    simdjson_inline bool any_bits_set_anywhere(simd8<uint8_t> bits) const { return !bits_not_set_anywhere(bits); }
+    simdjson_inline bool any_bits_set_anywhere(simd8<uint8_t> bits) const {
+      return __lsx_bnz_v(__lsx_vand_v(*this, bits));
+    }
     template<int N>
     simdjson_inline simd8<uint8_t> shr() const { return simd8<uint8_t>(__lsx_vsrli_b(*this, N)); }
     template<int N>

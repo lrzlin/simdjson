@@ -242,11 +242,11 @@ namespace simd {
     simdjson_inline simd8<bool> bits_not_set(simd8<uint8_t> bits) const { return (*this & bits).bits_not_set(); }
     simdjson_inline simd8<bool> any_bits_set() const { return ~this->bits_not_set(); }
     simdjson_inline simd8<bool> any_bits_set(simd8<uint8_t> bits) const { return ~this->bits_not_set(bits); }
-    simdjson_inline bool is_ascii() const { return 0 == __lsx_vpickve2gr_w(__lsx_vmskltz_b(*this), 0); }
-    simdjson_inline bool bits_not_set_anywhere() const { return 0 == __lsx_vpickve2gr_hu(__lsx_vmsknz_b(*this), 0); }
+    simdjson_inline bool is_ascii() const { return __lsx_bz_v(__lsx_vmskltz_b(*this)); }
+    simdjson_inline bool bits_not_set_anywhere() const { return 0 == __lsx_bz_v(this->value); }
     simdjson_inline bool any_bits_set_anywhere() const { return !bits_not_set_anywhere(); }
     simdjson_inline bool bits_not_set_anywhere(simd8<uint8_t> bits) const {
-      return 0 == __lsx_vpickve2gr_hu(__lsx_vmsknz_b(__lsx_vand_v(*this, bits)), 0);
+      return 0 == __lsx_bz_v(__lsx_vand_v(*this, bits));
     }
     simdjson_inline bool any_bits_set_anywhere(simd8<uint8_t> bits) const { return !bits_not_set_anywhere(bits); }
     template<int N>

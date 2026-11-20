@@ -275,10 +275,11 @@ namespace simd {
       uint16_t mask3 = uint16_t(mask >> 32);
       uint16_t mask4 = uint16_t(mask >> 48);
       __m128i zcnt = __lsx_vpcnt_h(__m128i(v2u64{~mask, 0}));
-      uint64_t zcnt1 = __lsx_vpickve2gr_hu(zcnt, 0);
-      uint64_t zcnt2 = __lsx_vpickve2gr_hu(zcnt, 1);
-      uint64_t zcnt3 = __lsx_vpickve2gr_hu(zcnt, 2);
-      uint64_t zcnt4 = __lsx_vpickve2gr_hu(zcnt, 3);
+      uint64_t zcnt0 = lsx_movfr2gr_d(zcnt);
+      uint64_t zcnt1 = zcnt0 & 0xFFFF;
+      uint64_t zcnt2 = (zcnt0 >> 16) & 0xFFFF;
+      uint64_t zcnt3 = (zcnt0 >> 32) & 0xFFFF;
+      uint64_t zcnt4 = (zcnt0 >> 48) & 0xFFFF;
       uint8_t *voutput = reinterpret_cast<uint8_t*>(output);
       // There should be a critical value which processes in scaler is faster.
       if (zcnt1)

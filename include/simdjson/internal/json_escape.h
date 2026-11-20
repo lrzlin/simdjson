@@ -69,6 +69,7 @@
 #endif
 #if SIMDJSON_EXPERIMENTAL_HAS_LSX
 #include <lsxintrin.h>
+#include "simdjson/lsx/intrinsics.h"
 #endif
 #if SIMDJSON_EXPERIMENTAL_HAS_LASX
 #include <lasxintrin.h>
@@ -334,14 +335,10 @@ find_next_json_quotable_character(const std::string_view view,
     if (!__lsx_bz_v(needs_escape)){
 
       //Found quotable character - extract exact byte position
-      uint64_t lo = __lsx_vpickve2gr_du(needs_escape,0);
-      uint64_t hi = __lsx_vpickve2gr_du(needs_escape,1);
+      uint64_t m = lsx_movfr2gr_d(__lsx_vmskltz_b(needs_escape));
       size_t offset = ptr - reinterpret_cast<const uint8_t *>(view.data());
-      if ( lo != 0) {
-        return offset + trailing_zeroes(lo) / 8;
-      } else {
-        return offset + 8 + trailing_zeroes(hi) / 8;
-      }
+
+      return offset + trailing_zeroes(m);
     }
     ptr += 16;
     remaining -= 16;

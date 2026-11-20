@@ -108,7 +108,7 @@ namespace simd {
     simdjson_inline simd8<T>& operator-=(const simd8<T> other) { *this = *this - other; return *static_cast<simd8<T>*>(this); }
 
     // Override to distinguish from bool version
-    simdjson_inline simd8<T> operator~() const { return *this ^ 0xFFu; }
+    simdjson_inline simd8<T> operator~() const { return __lsx_vnori_b(*this, 0); }
 
     // Perform a lookup assuming the value is between 0 and 16 (undefined behavior for out of range values)
     template<typename L>
@@ -232,10 +232,10 @@ namespace simd {
     simdjson_inline simd8<uint8_t> gt_bits(const simd8<uint8_t> other) const { return this->saturating_sub(other); }
     // Same as <, but only guarantees true is nonzero (< guarantees true = -1)
     simdjson_inline simd8<uint8_t> lt_bits(const simd8<uint8_t> other) const { return other.saturating_sub(*this); }
-    simdjson_inline simd8<bool> operator<=(const simd8<uint8_t> other) const { return other.max_val(*this) == other; }
-    simdjson_inline simd8<bool> operator>=(const simd8<uint8_t> other) const { return other.min_val(*this) == other; }
-    simdjson_inline simd8<bool> operator>(const simd8<uint8_t> other) const { return this->gt_bits(other).any_bits_set(); }
-    simdjson_inline simd8<bool> operator<(const simd8<uint8_t> other) const { return this->lt_bits(other).any_bits_set(); }
+    simdjson_inline simd8<bool> operator<=(const simd8<uint8_t> other) const { return __lsx_vsle_bu(*this, other); }
+    simdjson_inline simd8<bool> operator>=(const simd8<uint8_t> other) const { return __lsx_vsle_bu(other, *this); }
+    simdjson_inline simd8<bool> operator>(const simd8<uint8_t> other) const { return __lsx_vslt_bu(*this, other); }
+    simdjson_inline simd8<bool> operator<(const simd8<uint8_t> other) const { return __lsx_vslt_bu(other, *this); }
 
     // Bit-specific operations
     simdjson_inline simd8<bool> bits_not_set() const { return *this == uint8_t(0); }
@@ -243,8 +243,8 @@ namespace simd {
     simdjson_inline simd8<bool> any_bits_set() const { return ~this->bits_not_set(); }
     simdjson_inline simd8<bool> any_bits_set(simd8<uint8_t> bits) const { return ~this->bits_not_set(bits); }
     simdjson_inline bool is_ascii() const { return __lsx_bz_v(__lsx_vmskltz_b(*this)); }
-    simdjson_inline bool bits_not_set_anywhere() const { return 0 == __lsx_bz_v(this->value); }
-    simdjson_inline bool any_bits_set_anywhere() const { return !bits_not_set_anywhere(); }
+    simdjson_inline bool bits_not_set_anywhere() const { return __lsx_bz_v(this->value); }
+    simdjson_inline bool any_bits_set_anywhere() const { return __lsx_bz_v(__lsx_vand_v(*this, bits)); }
     simdjson_inline bool bits_not_set_anywhere(simd8<uint8_t> bits) const {
       return 0 == __lsx_bz_v(__lsx_vand_v(*this, bits));
     }

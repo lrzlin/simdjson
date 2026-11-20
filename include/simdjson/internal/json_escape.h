@@ -322,7 +322,6 @@ find_next_json_quotable_character(const std::string_view view,
   //SIMD constants for characters requiring escape
   __m128i v34 = __lsx_vrepli_b(34);  // '"'
   __m128i v92 = __lsx_vrepli_b(92);  // '\\'
-  __m128i v32 = __lsx_vrepli_b(32);  // control char threshold
 
   while (remaining >= 16){
     __m128i word = __lsx_vld(ptr, 0);
@@ -330,7 +329,7 @@ find_next_json_quotable_character(const std::string_view view,
     //Check for the quotable characters: '"', '\\', or control char (<32)
     __m128i needs_escape = __lsx_vseq_b(word, v34);
     needs_escape = __lsx_vor_v(needs_escape, __lsx_vseq_b(word, v92));
-    needs_escape = __lsx_vor_v(needs_escape, __lsx_vslt_bu(word, v32));
+    needs_escape = __lsx_vor_v(needs_escape, __lsx_vslei_bu(word, 31));
 
     if (!__lsx_bz_v(needs_escape)){
 

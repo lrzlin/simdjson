@@ -320,9 +320,9 @@ find_next_json_quotable_character(const std::string_view view,
   size_t remaining = len - location;
 
   //SIMD constants for characters requiring escape
-  __m128i v34 = __lsx_vreplgr2vr_b(34);  // '"'
-  __m128i v92 = __lsx_vreplgr2vr_b(92);  // '\\'
-  __m128i v32 = __lsx_vreplgr2vr_b(32);  // control char threshold
+  __m128i v34 = __lsx_vrepli_b(34);  // '"'
+  __m128i v92 = __lsx_vrepli_b(92);  // '\\'
+  __m128i v32 = __lsx_vrepli_b(32);  // control char threshold
 
   while (remaining >= 16){
     __m128i word = __lsx_vld(ptr, 0);

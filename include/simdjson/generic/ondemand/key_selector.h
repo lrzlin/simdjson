@@ -784,7 +784,7 @@ simdjson_really_inline std::size_t scan_key_length(const char* p) noexcept {
 #elif SIMDJSON_KEY_SELECTOR_HAS_LSX
     for (std::size_t b = 0; b < num_blocks; ++b) {
         __m128i v   = __lsx_vld(reinterpret_cast<const void*>(p + b * 16), 0);
-        __m128i cmp = __lsx_vseq_b(v, __lsx_vreplgr2vr_b('"'));
+        __m128i cmp = __lsx_vseq_b(v, __lsx_vrepli_b('"'));
         // vmskltz_b gathers the per-byte sign bits (set where the byte equals '"')
         // into the low 16 bits of lane 0, the LSX equivalent of movemask.
         unsigned m  = static_cast<unsigned>(lsx_movfr2gr_s(__lsx_vmskltz_b(cmp)));

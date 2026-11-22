@@ -749,6 +749,17 @@ static_assert(SIMDJSON_PADDING > 63,
 simdjson_really_inline bool neon_all_bytes_zero(uint8x16_t diff) noexcept {
     return vmaxvq_u32(vreinterpretq_u32_u8(diff)) == 0;
 }
+#elif SIMDJSON_KEY_SELECTOR_HAS_LSX
+simdjson_really_inline uint64_t lsx_movemask(__m128i v) noexcept {
+    __m128i msk = __lsx_vmskltz_b(v);
+#if defined(__clang__) && (__clang_major__ < 24)
+    return __lsx_vpickve2gr_du(msk, 0);
+#else
+    uint64_t m;
+    __asm__("movfr2gr.d %0, %1" : "=r"(m) : "f"(((v2f64)msk)[0]));
+    return m;
+#endif
+}
 #endif
 
 // Scan for the terminating '"' starting at p. Returns its byte offset (= key
@@ -783,11 +794,11 @@ simdjson_really_inline std::size_t scan_key_length(const char* p) noexcept {
 #elif SIMDJSON_KEY_SELECTOR_HAS_LSX
     for (std::size_t b = 0; b < num_blocks; ++b) {
         __m128i v   = __lsx_vld(reinterpret_cast<const void*>(p + b * 16), 0);
-        __m128i cmp = __lsx_vseq_b(v, __lsx_vreplgr2vr_b('"'));
+        __m128i cmp = __lsx_vseq_b(v, __lsx_vrepli_b('"'));
         // vmskltz_b gathers the per-byte sign bits (set where the byte equals '"')
         // into the low 16 bits of lane 0, the LSX equivalent of movemask.
-        unsigned m  = static_cast<unsigned>(__lsx_vpickve2gr_w(__lsx_vmskltz_b(cmp), 0)) & 0xFFFFu;
-        if (simdjson_likely(m != 0)) { return b * 16 + std::size_t(__builtin_ctz(m)); }
+        uint64_t m = lsx_movemask(cmp);
+        if (simdjson_likely(m != 0)) { return b * 16 + std::size_t(__builtin_ctzll(m)); }
     }
     return MaxKeyLen + 1;
 #else
@@ -827,7 +838,7 @@ simdjson_really_inline bool compare_key_bytes(
         __m128i idx = __lsx_vld(reinterpret_cast<const void*>(idx16), 0);
         __m128i mask = __lsx_vslt_b(idx, __lsx_vreplgr2vr_b(static_cast<int>(len)));
         __m128i eq = __lsx_vseq_b(__lsx_vand_v(vp, mask), vs);
-        return (static_cast<unsigned>(__lsx_vpickve2gr_w(__lsx_vmskltz_b(eq), 0)) & 0xFFFFu) == 0xFFFFu;
+        return lsx_movemask(eq) == 0xFFFFu;
 #else
         for (std::size_t i = 0; i < len; ++i)
             if (p[i] != stored[i]) return false;
@@ -868,9 +879,7 @@ simdjson_really_inline bool compare_key_bytes(
         __m128i m_hi = __lsx_vslt_b(__lsx_vld(reinterpret_cast<const void*>(idx32_hi), 0), lenv);
         __m128i eq_lo = __lsx_vseq_b(__lsx_vand_v(vp_lo, m_lo), vs_lo);
         __m128i eq_hi = __lsx_vseq_b(__lsx_vand_v(vp_hi, m_hi), vs_hi);
-        unsigned mlo = static_cast<unsigned>(__lsx_vpickve2gr_w(__lsx_vmskltz_b(eq_lo), 0)) & 0xFFFFu;
-        unsigned mhi = static_cast<unsigned>(__lsx_vpickve2gr_w(__lsx_vmskltz_b(eq_hi), 0)) & 0xFFFFu;
-        return (mlo & mhi) == 0xFFFFu;
+        return lsx_movemask(__lsx_vand_v(eq_lo, eq_hi)) == 0xFFFFu;
 #else
         for (std::size_t i = 0; i < len; ++i)
             if (p[i] != stored[i]) return false;
@@ -906,18 +915,18 @@ simdjson_really_inline bool compare_key_bytes(
         }
         return eq == 0xFFFF;
 #elif SIMDJSON_KEY_SELECTOR_HAS_LSX
-        __m128i base = __lsx_vld(reinterpret_cast<const void*>(idx16), 0);
+        __m128i idxv = __lsx_vld(reinterpret_cast<const void*>(idx16), 0);
         __m128i lenv = __lsx_vreplgr2vr_b(static_cast<int>(len));
-        unsigned acc = 0xFFFFu;
+        __m128i eq_all;
         for (std::size_t b = 0; b < num_blocks; ++b) {
             __m128i vp   = __lsx_vld(reinterpret_cast<const void*>(p + b * 16), 0);
             __m128i vs   = __lsx_vld(reinterpret_cast<const void*>(stored + b * 16), 0);
-            __m128i idxv = __lsx_vadd_b(base, __lsx_vreplgr2vr_b(static_cast<int>(b * 16)));
             __m128i mask = __lsx_vslt_b(idxv, lenv);
+            idxv = __lsx_vaddi_bu(idxv, 16);
             __m128i eq   = __lsx_vseq_b(__lsx_vand_v(vp, mask), vs);
-            acc &= static_cast<unsigned>(__lsx_vpickve2gr_w(__lsx_vmskltz_b(eq), 0)) & 0xFFFFu;
+            eq_all = (b == 0) ? eq : __lsx_vand_v(eq_all, eq);
         }
-        return acc == 0xFFFFu;
+        return lsx_movemask(eq_all) == 0xFFFFu;
 #else
         for (std::size_t i = 0; i < len; ++i)
             if (p[i] != stored[i]) return false;

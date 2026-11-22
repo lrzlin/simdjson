@@ -62,7 +62,8 @@ namespace simd {
   template<>
   struct simd8<bool>: base8<bool> {
     static simdjson_inline simd8<bool> splat(bool _value) {
-      return __lsx_vreplgr2vr_b(uint8_t(-(!!_value)));
+      uint8_t v = uint8_t(-(!!_value));
+      return __m128i(v16u8{v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v});
     }
 
     simdjson_inline simd8() : base8() {}
@@ -70,14 +71,21 @@ namespace simd {
     // Splat constructor
     simdjson_inline simd8(bool _value) : base8<bool>(splat(_value)) {}
 
-    simdjson_inline int to_bitmask() const { return __lsx_vpickve2gr_w(__lsx_vmskltz_b(*this), 0); }
+    simdjson_inline int to_bitmask() const { return static_cast<int>(lsx_movfr2gr_s(__lsx_vmskltz_b(*this))); }
     simdjson_inline bool any() const { return !__lsx_bz_v(this->value); }
-    simdjson_inline simd8<bool> operator~() const { return *this ^ true; }
+    simdjson_inline simd8<bool> operator~() const { return __lsx_vnori_b(this->value, 0); }
   };
 
   template<typename T>
   struct base8_numeric: base8<T> {
-    static simdjson_inline simd8<T> splat(T _value) { return __lsx_vreplgr2vr_b(_value); }
+    static simdjson_inline simd8<T> splat(T _value) {
+      return __m128i(v16u8{
+        uint8_t(_value), uint8_t(_value), uint8_t(_value), uint8_t(_value),
+        uint8_t(_value), uint8_t(_value), uint8_t(_value), uint8_t(_value),
+        uint8_t(_value), uint8_t(_value), uint8_t(_value), uint8_t(_value),
+        uint8_t(_value), uint8_t(_value), uint8_t(_value), uint8_t(_value)
+      });
+    }
     static simdjson_inline simd8<T> zero() { return __lsx_vldi(0); }
     static simdjson_inline simd8<T> load(const T values[16]) {
       return __lsx_vld(reinterpret_cast<const __m128i *>(values), 0);
@@ -108,7 +116,7 @@ namespace simd {
     simdjson_inline simd8<T>& operator-=(const simd8<T> other) { *this = *this - other; return *static_cast<simd8<T>*>(this); }
 
     // Override to distinguish from bool version
-    simdjson_inline simd8<T> operator~() const { return *this ^ 0xFFu; }
+    simdjson_inline simd8<T> operator~() const { return __lsx_vnori_b(*this, 0); }
 
     // Perform a lookup assuming the value is between 0 and 16 (undefined behavior for out of range values)
     template<typename L>
@@ -136,7 +144,12 @@ namespace simd {
       __m128i pruned = __lsx_vshuf_b(*this, *this, shufmask);
       // we still need to put the  pieces back together.
       // we compute the popcount of the first words:
-      int pop1 = BitsSetTable256mul2[mask1];
+      const unsigned char *pop_tbl = BitsSetTable256mul2;
+#if defined(__GNUC__) && !defined(__clang__)
+      // Prevent GCC -fsection-anchors from splitting indexed load (ldx.bu) into add.d + ld.bu.
+      __asm__("" : "+r"(pop_tbl));
+#endif
+      int pop1 = pop_tbl[mask1];
       // then load the corresponding mask
       __m128i compactmask = __lsx_vldx(reinterpret_cast<void*>(reinterpret_cast<unsigned long>(pshufb_combine_table)), pop1 * 8);
       __m128i answer = __lsx_vshuf_b(pruned, pruned, compactmask);
@@ -232,21 +245,21 @@ namespace simd {
     simdjson_inline simd8<uint8_t> gt_bits(const simd8<uint8_t> other) const { return this->saturating_sub(other); }
     // Same as <, but only guarantees true is nonzero (< guarantees true = -1)
     simdjson_inline simd8<uint8_t> lt_bits(const simd8<uint8_t> other) const { return other.saturating_sub(*this); }
-    simdjson_inline simd8<bool> operator<=(const simd8<uint8_t> other) const { return other.max_val(*this) == other; }
-    simdjson_inline simd8<bool> operator>=(const simd8<uint8_t> other) const { return other.min_val(*this) == other; }
-    simdjson_inline simd8<bool> operator>(const simd8<uint8_t> other) const { return this->gt_bits(other).any_bits_set(); }
-    simdjson_inline simd8<bool> operator<(const simd8<uint8_t> other) const { return this->lt_bits(other).any_bits_set(); }
+    simdjson_inline simd8<bool> operator<=(const simd8<uint8_t> other) const { return __lsx_vsle_bu(*this, other); }
+    simdjson_inline simd8<bool> operator>=(const simd8<uint8_t> other) const { return __lsx_vsle_bu(other, *this); }
+    simdjson_inline simd8<bool> operator>(const simd8<uint8_t> other) const { return __lsx_vslt_bu(other, *this); }
+    simdjson_inline simd8<bool> operator<(const simd8<uint8_t> other) const { return __lsx_vslt_bu(*this, other); }
 
     // Bit-specific operations
-    simdjson_inline simd8<bool> bits_not_set() const { return *this == uint8_t(0); }
+    simdjson_inline simd8<bool> bits_not_set() const { return __lsx_vseqi_b(*this, 0); }
     simdjson_inline simd8<bool> bits_not_set(simd8<uint8_t> bits) const { return (*this & bits).bits_not_set(); }
     simdjson_inline simd8<bool> any_bits_set() const { return ~this->bits_not_set(); }
     simdjson_inline simd8<bool> any_bits_set(simd8<uint8_t> bits) const { return ~this->bits_not_set(bits); }
-    simdjson_inline bool is_ascii() const { return 0 == __lsx_vpickve2gr_w(__lsx_vmskltz_b(*this), 0); }
-    simdjson_inline bool bits_not_set_anywhere() const { return 0 == __lsx_vpickve2gr_hu(__lsx_vmsknz_b(*this), 0); }
+    simdjson_inline bool is_ascii() const { return 0 == lsx_movfr2gr_s(__lsx_vmskltz_b(*this)); }
+    simdjson_inline bool bits_not_set_anywhere() const { return 0 == lsx_movfr2gr_s(__lsx_vmsknz_b(*this)); }
     simdjson_inline bool any_bits_set_anywhere() const { return !bits_not_set_anywhere(); }
     simdjson_inline bool bits_not_set_anywhere(simd8<uint8_t> bits) const {
-      return 0 == __lsx_vpickve2gr_hu(__lsx_vmsknz_b(__lsx_vand_v(*this, bits)), 0);
+      return 0 == lsx_movfr2gr_s(__lsx_vmsknz_b(__lsx_vand_v(*this, bits)));
     }
     simdjson_inline bool any_bits_set_anywhere(simd8<uint8_t> bits) const { return !bits_not_set_anywhere(bits); }
     template<int N>
@@ -275,10 +288,11 @@ namespace simd {
       uint16_t mask3 = uint16_t(mask >> 32);
       uint16_t mask4 = uint16_t(mask >> 48);
       __m128i zcnt = __lsx_vpcnt_h(__m128i(v2u64{~mask, 0}));
-      uint64_t zcnt1 = __lsx_vpickve2gr_hu(zcnt, 0);
-      uint64_t zcnt2 = __lsx_vpickve2gr_hu(zcnt, 1);
-      uint64_t zcnt3 = __lsx_vpickve2gr_hu(zcnt, 2);
-      uint64_t zcnt4 = __lsx_vpickve2gr_hu(zcnt, 3);
+      uint64_t zcnt0 = lsx_movfr2gr_d(zcnt);
+      uint64_t zcnt1 = zcnt0 & 0xFFFF;
+      uint64_t zcnt2 = (zcnt0 >> 16) & 0xFFFF;
+      uint64_t zcnt3 = (zcnt0 >> 32) & 0xFFFF;
+      uint64_t zcnt4 = (zcnt0 >> 48) & 0xFFFF;
       uint8_t *voutput = reinterpret_cast<uint8_t*>(output);
       // There should be a critical value which processes in scaler is faster.
       if (zcnt1)
@@ -310,7 +324,7 @@ namespace simd {
       __m128i mask4 = __lsx_vmskltz_b(this->chunks[3]);
       mask1 = __lsx_vilvl_h(mask2, mask1);
       mask2 = __lsx_vilvl_h(mask4, mask3);
-      return __lsx_vpickve2gr_du(__lsx_vilvl_w(mask2, mask1), 0);
+      return lsx_movfr2gr_d(__lsx_vilvl_w(mask2, mask1));
     }
 
     simdjson_inline simd8<T> reduce_or() const {

@@ -319,9 +319,8 @@ find_next_json_quotable_character(const std::string_view view,
   size_t remaining = len - location;
 
   //SIMD constants for characters requiring escape
-  __m128i v34 = __lsx_vreplgr2vr_b(34);  // '"'
-  __m128i v92 = __lsx_vreplgr2vr_b(92);  // '\\'
-  __m128i v32 = __lsx_vreplgr2vr_b(32);  // control char threshold
+  __m128i v34 = __lsx_vrepli_b(34);  // '"'
+  __m128i v92 = __lsx_vrepli_b(92);  // '\\'
 
   while (remaining >= 16){
     __m128i word = __lsx_vld(ptr, 0);
@@ -329,19 +328,20 @@ find_next_json_quotable_character(const std::string_view view,
     //Check for the quotable characters: '"', '\\', or control char (<32)
     __m128i needs_escape = __lsx_vseq_b(word, v34);
     needs_escape = __lsx_vor_v(needs_escape, __lsx_vseq_b(word, v92));
-    needs_escape = __lsx_vor_v(needs_escape, __lsx_vslt_bu(word, v32));
+    needs_escape = __lsx_vor_v(needs_escape, __lsx_vslei_bu(word, 31));
 
     if (!__lsx_bz_v(needs_escape)){
-
       //Found quotable character - extract exact byte position
-      uint64_t lo = __lsx_vpickve2gr_du(needs_escape,0);
-      uint64_t hi = __lsx_vpickve2gr_du(needs_escape,1);
+      __m128i msk = __lsx_vmskltz_b(needs_escape);
+#if defined(__clang__) && (__clang_major__ < 24)
+      uint64_t m = __lsx_vpickve2gr_du(msk, 0);
+#else
+      uint64_t m;
+      __asm__ ("movfr2gr.d %0, %1" : "=r"(m) : "f"(((v2f64)msk)[0]));
+#endif
       size_t offset = ptr - reinterpret_cast<const uint8_t *>(view.data());
-      if ( lo != 0) {
-        return offset + trailing_zeroes(lo) / 8;
-      } else {
-        return offset + 8 + trailing_zeroes(hi) / 8;
-      }
+
+      return offset + trailing_zeroes(m);
     }
     ptr += 16;
     remaining -= 16;
